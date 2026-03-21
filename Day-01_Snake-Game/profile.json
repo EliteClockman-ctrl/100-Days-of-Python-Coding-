@@ -1,0 +1,32 @@
+{
+  "language": "vi",
+  "theme": "default",
+  "speed": 11,
+  "grid": true,
+  "sound": true,
+  "volume": 70,
+  "mode": "zen",
+  "best_score": 91,
+  "total_games": 3,
+  "total_food": 61,
+  "total_time": 268,
+  "best_streak": 91,
+  "leaderboard": [
+    {
+      "score": 91,
+      "mode": "zen",
+      "time": 233
+    },
+    {
+      "score": 17,
+      "mode": "classic",
+      "time": 21
+    },
+    {
+      "score": 7,
+      "mode": "zen",
+      "time": 14
+    }
+  ],
+  "feature_statuses": {}
+}
