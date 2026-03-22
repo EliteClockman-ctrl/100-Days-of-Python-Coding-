@@ -14,9 +14,12 @@ Series of daily Python projects designed to build up skills with consistent, man
 4. Run the Python script described there (e.g., `python game.py`).
 5. Commit whatever you change, push a new branch, and repeat the next day with a fresh folder.
 
+## Current days
+- Day 01: `Day-01_Snake-Game` (Snake Game with menu + sounds).
+- Day 02: `Day-02_Chess-Game` (Chess Game with pygame, full rules, Stockfish/fallback AI, UI + sounds).
+
 ## Daily workflow
 - Plan a feature or learning goal before coding.
 - Keep the code clean and document important design or UX decisions in that day's README.
 - If assets are needed (sounds, images), keep them inside that day's folder to avoid cluttering the top level.
 - Export or log progress (e.g., `features_report.json`) so you can summarize each sprint.
-

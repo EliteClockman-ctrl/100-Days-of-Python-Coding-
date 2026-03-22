@@ -38,3 +38,8 @@ If you do not install Stockfish, the game still runs with fallback AI (weaker).
 - Engine path is read from `stockfish.exe` in the same folder. If you want a custom path, edit `ENGINE_PATH` in `chess_game.py`.
 - This project uses `python-chess` for rules and Stockfish for the AI.
 - If Stockfish is not found, the game still works using the built-in fallback AI.
+
+## Stockfish API?
+- Stockfish does not provide an official public cloud REST API.
+- This project uses the official local engine approach via UCI (`stockfish.exe` + `python-chess`).
+- If you want a REST API, you can wrap local Stockfish with your own server (FastAPI/Flask).
