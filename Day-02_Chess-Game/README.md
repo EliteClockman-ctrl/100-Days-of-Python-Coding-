@@ -17,9 +17,12 @@ This day builds a full chess game in pygame and connects a real engine (Stockfis
 1. `cd Day-02_Chess-Game`
 2. Install dependencies:
    `pip install -r requirements.txt`
-3. Download Stockfish for Windows and place the binary in this folder as `stockfish.exe`
+3. Install Stockfish automatically:
+   `python setup_stockfish.py`
 4. Run:
    `python chess_game.py`
+
+If you do not install Stockfish, the game still runs with fallback AI (weaker).
 
 ## Controls
 - Click a piece, then click a destination to move.
