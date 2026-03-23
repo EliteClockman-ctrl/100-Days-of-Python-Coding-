@@ -18,6 +18,7 @@ Series of daily Python projects designed to build up skills with consistent, man
 - Day 01: `Day-01_Snake-Game` (Snake Game with menu + sounds).
 - Day 02: `Day-02_Chess-Game` (Chess Game with pygame, full rules, Stockfish/fallback AI, UI + sounds).
 - Day 03: `Day-03_QR-Code-Generator` (Desktop QR generator with presets, styling, and export).
+- Day 04: `Day-04_Ping-Pong-Game` (Pong arcade game with menu, settings, PvP/AI, particles, and web resources).
 
 ## Daily workflow
 - Plan a feature or learning goal before coding.
