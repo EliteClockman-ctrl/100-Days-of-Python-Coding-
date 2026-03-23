@@ -4,10 +4,12 @@ A polished Pong-style arcade game built with `pygame` for Day 4.
 
 ## Features
 - Main Menu: `Start Vs AI`, `Start 2 Players`, `Settings`, `Quit`
-- Settings: target score, AI speed, master volume
+- Settings: target score, AI difficulty (`Easy`, `Medium`, `Hard`), arena, master volume
 - Smooth gameplay at high FPS with paddle spin/reflection
+- Multiple arenas for diverse visuals: `Neon Night`, `Sunset Court`, `Ice Dome`, `Retro Arena`
 - Particle impact effects and score flash effect
 - Pause system (`Esc`) and quick restart (`R`)
+- In-match `Main Menu` button to exit current game instantly
 - Winner result card with rematch options
 - Persistent profile (`profile.json`) for settings
 
@@ -29,6 +31,7 @@ A polished Pong-style arcade game built with `pygame` for Day 4.
 - `ESC`: Pause/Resume during match
 - `R`: Restart match
 - `Space`: Play again on result screen
+- Click `Main Menu` button (top-right) during match to leave game
 
 ## Notes
 - If assets fail to load, the game still runs with safe fallback colors/fonts.

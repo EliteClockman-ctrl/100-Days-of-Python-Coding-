@@ -2,10 +2,10 @@
 
 Features:
 - Main menu with PvP, Vs AI, Settings, Quit
-- Settings for volume, target score, AI speed
-- Modern board rendering with background image from web resource
+- Settings for volume, target score, AI difficulty, and arena
+- Multiple arena themes for more diverse gameplay visuals
 - Sound effects from web resource pack
-- Pause, restart, and winner overlay
+- Pause, restart, in-match Main Menu button, and winner overlay
 """
 
 from __future__ import annotations
@@ -37,19 +37,63 @@ SCENE_RESULT = "result"
 
 WHITE = (242, 246, 252)
 MUTED = (175, 190, 210)
-DARK = (10, 16, 28)
 NAVY = (18, 32, 56)
 CYAN = (58, 188, 255)
 CYAN_SOFT = (90, 214, 255)
 ORANGE = (255, 170, 80)
-RED = (248, 92, 92)
+
+AI_DIFFICULTY_ORDER = ["Easy", "Medium", "Hard"]
+AI_PRESETS = {
+    "Easy": {"speed": 0.54, "prediction": 0.03, "deadzone": 28, "mistake": 55},
+    "Medium": {"speed": 0.72, "prediction": 0.08, "deadzone": 16, "mistake": 28},
+    "Hard": {"speed": 0.95, "prediction": 0.13, "deadzone": 8, "mistake": 12},
+}
+
+ARENA_PRESETS = [
+    {
+        "name": "Neon Night",
+        "background": "photo",
+        "tint": (8, 16, 30, 150),
+        "line": (213, 230, 255),
+        "accent": (94, 214, 255),
+        "style": "clean",
+    },
+    {
+        "name": "Sunset Court",
+        "background": "gradient",
+        "top": (64, 25, 42),
+        "bottom": (22, 27, 56),
+        "line": (255, 223, 192),
+        "accent": (255, 166, 112),
+        "style": "sunset",
+    },
+    {
+        "name": "Ice Dome",
+        "background": "gradient",
+        "top": (20, 46, 74),
+        "bottom": (10, 19, 31),
+        "line": (206, 244, 255),
+        "accent": (116, 223, 255),
+        "style": "ice",
+    },
+    {
+        "name": "Retro Arena",
+        "background": "gradient",
+        "top": (16, 54, 36),
+        "bottom": (9, 28, 19),
+        "line": (218, 248, 220),
+        "accent": (138, 238, 162),
+        "style": "retro",
+    },
+]
 
 DEFAULTS = {
     "master_volume": 0.65,
     "target_score": 7,
-    "ai_speed": 0.66,
+    "ai_difficulty": "Medium",
     "ball_speed": 420,
     "mode": "ai",
+    "arena_id": 0,
 }
 
 
@@ -57,9 +101,10 @@ DEFAULTS = {
 class GameConfig:
     master_volume: float = DEFAULTS["master_volume"]
     target_score: int = DEFAULTS["target_score"]
-    ai_speed: float = DEFAULTS["ai_speed"]
+    ai_difficulty: str = DEFAULTS["ai_difficulty"]
     ball_speed: float = DEFAULTS["ball_speed"]
     mode: str = DEFAULTS["mode"]
+    arena_id: int = DEFAULTS["arena_id"]
 
 
 class SoundManager:
@@ -82,9 +127,10 @@ class SoundManager:
     def set_volume(self, value: float) -> None:
         if not self.available:
             return
+        value = max(0.0, min(1.0, value))
         for snd in (self.hit, self.score):
             if snd:
-                snd.set_volume(max(0.0, min(1.0, value)))
+                snd.set_volume(value)
 
     def play_hit(self) -> None:
         if self.hit:
@@ -161,12 +207,15 @@ class Button:
 class PingPongGame:
     def __init__(self) -> None:
         pygame.init()
-        pygame.display.set_caption("Day 04 - Ping Pong Game")
+        pygame.display.set_caption("Day 04 - Ping Pong Arena")
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         self.clock = pygame.time.Clock()
         self.running = True
 
         self.config = self.load_profile()
+        self.config.arena_id %= len(ARENA_PRESETS)
+        if self.config.ai_difficulty not in AI_PRESETS:
+            self.config.ai_difficulty = "Medium"
 
         self.title_font = self.load_font(44)
         self.head_font = self.load_font(24)
@@ -174,6 +223,8 @@ class PingPongGame:
         self.small_font = self.load_font(12)
 
         self.bg = self.load_background()
+        self.arena_backgrounds = self.build_arena_backgrounds()
+
         self.sounds = SoundManager()
         self.sounds.load()
         self.sounds.set_volume(self.config.master_volume)
@@ -193,6 +244,8 @@ class PingPongGame:
         self.ball.reset(self.config.ball_speed, serve_right=random.choice([True, False]))
 
         self.particles: list[Particle] = []
+        self.ai_error_timer = 0.0
+        self.ai_error_offset = 0.0
 
         self.menu_buttons = [
             Button("Start Vs AI", SCREEN_W // 2 - 170, 260, 340, 58),
@@ -202,19 +255,23 @@ class PingPongGame:
         ]
 
         self.settings_buttons = [
-            Button("Target Score -", 250, 200, 260, 54),
-            Button("Target Score +", 530, 200, 260, 54),
-            Button("AI Speed -", 250, 285, 260, 54),
-            Button("AI Speed +", 530, 285, 260, 54),
-            Button("Volume -", 250, 370, 260, 54),
-            Button("Volume +", 530, 370, 260, 54),
-            Button("Back", 430, 470, 220, 58),
+            Button("Target Score -", 250, 180, 260, 54),
+            Button("Target Score +", 530, 180, 260, 54),
+            Button("Difficulty -", 250, 255, 260, 54),
+            Button("Difficulty +", 530, 255, 260, 54),
+            Button("Arena -", 250, 330, 260, 54),
+            Button("Arena +", 530, 330, 260, 54),
+            Button("Volume -", 250, 405, 260, 54),
+            Button("Volume +", 530, 405, 260, 54),
+            Button("Back", 430, 500, 220, 58),
         ]
 
         self.result_buttons = [
             Button("Play Again", SCREEN_W // 2 - 170, 410, 340, 58),
             Button("Main Menu", SCREEN_W // 2 - 170, 480, 340, 58),
         ]
+
+        self.play_menu_button = Button("Main Menu", SCREEN_W - 250, 18, 220, 44)
 
     def load_font(self, size: int) -> pygame.font.Font:
         if FONT_PATH.exists():
@@ -232,6 +289,40 @@ class PingPongGame:
         bg.fill((12, 18, 30))
         return bg
 
+    def build_arena_backgrounds(self) -> list[pygame.Surface]:
+        backgrounds: list[pygame.Surface] = []
+        for preset in ARENA_PRESETS:
+            surface = pygame.Surface((SCREEN_W, SCREEN_H)).convert()
+            if preset["background"] == "photo":
+                surface.blit(self.bg, (0, 0))
+                overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+                overlay.fill(preset["tint"])
+                surface.blit(overlay, (0, 0))
+            else:
+                top = preset["top"]
+                bottom = preset["bottom"]
+                for y in range(SCREEN_H):
+                    t = y / max(1, SCREEN_H - 1)
+                    r = int(top[0] * (1 - t) + bottom[0] * t)
+                    g = int(top[1] * (1 - t) + bottom[1] * t)
+                    b = int(top[2] * (1 - t) + bottom[2] * t)
+                    pygame.draw.line(surface, (r, g, b), (0, y), (SCREEN_W, y))
+
+                if preset["style"] == "sunset":
+                    for r in range(160, 460, 50):
+                        pygame.draw.circle(surface, (255, 140, 96, 40), (SCREEN_W // 2, SCREEN_H - 40), r, 2)
+                elif preset["style"] == "ice":
+                    for x in range(80, SCREEN_W, 150):
+                        pygame.draw.line(surface, (170, 220, 255), (x, 0), (x - 120, SCREEN_H), 1)
+                elif preset["style"] == "retro":
+                    for y in range(35, SCREEN_H, 35):
+                        pygame.draw.line(surface, (122, 198, 140), (0, y), (SCREEN_W, y), 1)
+            backgrounds.append(surface)
+        return backgrounds
+
+    def current_arena(self) -> dict:
+        return ARENA_PRESETS[self.config.arena_id]
+
     def load_profile(self) -> GameConfig:
         if not PROFILE_PATH.exists():
             return GameConfig()
@@ -239,25 +330,49 @@ class PingPongGame:
             data = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
         except Exception:
             return GameConfig()
+
         merged = dict(DEFAULTS)
         merged.update(data)
+
+        difficulty = str(merged.get("ai_difficulty", "")).strip()
+        if difficulty not in AI_PRESETS:
+            legacy_speed = float(merged.get("ai_speed", 0.66))
+            if legacy_speed < 0.62:
+                difficulty = "Easy"
+            elif legacy_speed < 0.86:
+                difficulty = "Medium"
+            else:
+                difficulty = "Hard"
+
+        arena_id = int(merged.get("arena_id", 0)) % len(ARENA_PRESETS)
+
         return GameConfig(
             master_volume=float(merged["master_volume"]),
             target_score=int(merged["target_score"]),
-            ai_speed=float(merged["ai_speed"]),
+            ai_difficulty=difficulty,
             ball_speed=float(merged["ball_speed"]),
             mode=str(merged["mode"]),
+            arena_id=arena_id,
         )
 
     def save_profile(self) -> None:
         payload = {
             "master_volume": self.config.master_volume,
             "target_score": self.config.target_score,
-            "ai_speed": self.config.ai_speed,
+            "ai_difficulty": self.config.ai_difficulty,
             "ball_speed": self.config.ball_speed,
             "mode": self.mode,
+            "arena_id": self.config.arena_id,
         }
         PROFILE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def cycle_difficulty(self, step: int) -> None:
+        idx = AI_DIFFICULTY_ORDER.index(self.config.ai_difficulty)
+        idx = (idx + step) % len(AI_DIFFICULTY_ORDER)
+        self.config.ai_difficulty = AI_DIFFICULTY_ORDER[idx]
+
+    def cycle_arena(self, step: int) -> None:
+        self.config.arena_id = (self.config.arena_id + step) % len(ARENA_PRESETS)
 
     def reset_match(self) -> None:
         self.left_score = 0
@@ -269,8 +384,12 @@ class PingPongGame:
         self.paused = False
         self.winner = ""
         self.flash_timer = 0.0
+        self.ai_error_timer = 0.0
+        self.ai_error_offset = 0.0
 
     def spawn_hit_particles(self) -> None:
+        arena = self.current_arena()
+        accent = arena["accent"]
         for _ in range(10):
             speed = random.uniform(80, 260)
             angle = random.uniform(0, math.tau)
@@ -281,7 +400,7 @@ class PingPongGame:
                     vx=math.cos(angle) * speed,
                     vy=math.sin(angle) * speed,
                     life=random.uniform(0.15, 0.45),
-                    color=random.choice([CYAN, CYAN_SOFT, ORANGE, WHITE]),
+                    color=random.choice([CYAN, CYAN_SOFT, ORANGE, WHITE, accent]),
                 )
             )
 
@@ -336,19 +455,31 @@ class PingPongGame:
             elif self.settings_buttons[1].hit_test(pos):
                 self.config.target_score = min(25, self.config.target_score + 1)
             elif self.settings_buttons[2].hit_test(pos):
-                self.config.ai_speed = max(0.25, self.config.ai_speed - 0.05)
+                self.cycle_difficulty(-1)
             elif self.settings_buttons[3].hit_test(pos):
-                self.config.ai_speed = min(1.2, self.config.ai_speed + 0.05)
+                self.cycle_difficulty(1)
             elif self.settings_buttons[4].hit_test(pos):
+                self.cycle_arena(-1)
+            elif self.settings_buttons[5].hit_test(pos):
+                self.cycle_arena(1)
+            elif self.settings_buttons[6].hit_test(pos):
                 self.config.master_volume = max(0.0, self.config.master_volume - 0.05)
                 self.sounds.set_volume(self.config.master_volume)
-            elif self.settings_buttons[5].hit_test(pos):
+            elif self.settings_buttons[7].hit_test(pos):
                 self.config.master_volume = min(1.0, self.config.master_volume + 0.05)
                 self.sounds.set_volume(self.config.master_volume)
-            elif self.settings_buttons[6].hit_test(pos):
+            elif self.settings_buttons[8].hit_test(pos):
                 self.save_profile()
                 self.scene = SCENE_MENU
             self.sounds.play_hit()
+            return
+
+        if self.scene == SCENE_PLAYING:
+            if self.play_menu_button.hit_test(pos):
+                self.scene = SCENE_MENU
+                self.paused = False
+                self.save_profile()
+                self.sounds.play_hit()
             return
 
         if self.scene == SCENE_RESULT:
@@ -362,6 +493,22 @@ class PingPongGame:
         self.mode = mode
         self.scene = SCENE_PLAYING
         self.reset_match()
+
+    def update_ai(self, dt: float) -> None:
+        preset = AI_PRESETS[self.config.ai_difficulty]
+        ai_center = self.right_paddle.y + self.right_paddle.h * 0.5
+
+        self.ai_error_timer -= dt
+        if self.ai_error_timer <= 0:
+            self.ai_error_timer = random.uniform(0.18, 0.42)
+            self.ai_error_offset = random.uniform(-preset["mistake"], preset["mistake"])
+
+        target = self.ball.y + self.ball.vy * preset["prediction"] + self.ai_error_offset
+
+        if ai_center < target - preset["deadzone"]:
+            self.right_paddle.move(self.right_paddle.speed * preset["speed"] * dt)
+        elif ai_center > target + preset["deadzone"]:
+            self.right_paddle.move(-self.right_paddle.speed * preset["speed"] * dt)
 
     def update_play(self, dt: float) -> None:
         if self.paused:
@@ -384,12 +531,7 @@ class PingPongGame:
                 right_move += self.right_paddle.speed * dt
             self.right_paddle.move(right_move)
         else:
-            ai_center = self.right_paddle.y + self.right_paddle.h * 0.5
-            target = self.ball.y + self.ball.vy * 0.08
-            if ai_center < target - 8:
-                self.right_paddle.move(self.right_paddle.speed * self.config.ai_speed * dt)
-            elif ai_center > target + 8:
-                self.right_paddle.move(-self.right_paddle.speed * self.config.ai_speed * dt)
+            self.update_ai(dt)
 
         self.ball.update(dt)
 
@@ -407,7 +549,10 @@ class PingPongGame:
         left_rect = self.left_paddle.rect()
         right_rect = self.right_paddle.rect()
         ball_rect = pygame.Rect(
-            int(self.ball.x - self.ball.radius), int(self.ball.y - self.ball.radius), self.ball.radius * 2, self.ball.radius * 2
+            int(self.ball.x - self.ball.radius),
+            int(self.ball.y - self.ball.radius),
+            self.ball.radius * 2,
+            self.ball.radius * 2,
         )
 
         if ball_rect.colliderect(left_rect) and self.ball.vx < 0:
@@ -457,14 +602,12 @@ class PingPongGame:
             self.update_play(dt)
 
     def draw_background(self) -> None:
-        self.screen.blit(self.bg, (0, 0))
-        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        overlay.fill((8, 14, 22, 150))
-        self.screen.blit(overlay, (0, 0))
+        self.screen.blit(self.arena_backgrounds[self.config.arena_id], (0, 0))
 
     def draw_center_line(self) -> None:
+        line_color = self.current_arena()["line"]
         for y in range(30, SCREEN_H - 30, 30):
-            pygame.draw.rect(self.screen, (220, 230, 250, 80), (SCREEN_W // 2 - 4, y, 8, 16), border_radius=3)
+            pygame.draw.rect(self.screen, line_color, (SCREEN_W // 2 - 4, y, 8, 16), border_radius=3)
 
     def draw_score(self) -> None:
         left = self.title_font.render(str(self.left_score), True, WHITE)
@@ -472,20 +615,30 @@ class PingPongGame:
         self.screen.blit(left, left.get_rect(center=(SCREEN_W * 0.25, 52)))
         self.screen.blit(right, right.get_rect(center=(SCREEN_W * 0.75, 52)))
 
-        mode_text = "Mode: VS AI" if self.mode == "ai" else "Mode: 2 Players"
+        if self.mode == "ai":
+            mode_text = f"Mode: VS AI ({self.config.ai_difficulty})"
+        else:
+            mode_text = "Mode: 2 Players"
         mode_surf = self.text_font.render(mode_text, True, CYAN_SOFT)
         self.screen.blit(mode_surf, (SCREEN_W // 2 - mode_surf.get_width() // 2, 20))
 
         target = self.text_font.render(f"Target: {self.config.target_score}", True, MUTED)
+        arena = self.text_font.render(f"Arena: {self.current_arena()['name']}", True, MUTED)
         self.screen.blit(target, (22, 20))
+        self.screen.blit(arena, (22, 46))
 
     def draw_play_scene(self) -> None:
         self.draw_background()
         self.draw_center_line()
         self.draw_score()
 
-        pygame.draw.rect(self.screen, WHITE, self.left_paddle.rect(), border_radius=8)
-        pygame.draw.rect(self.screen, WHITE, self.right_paddle.rect(), border_radius=8)
+        mouse = pygame.mouse.get_pos()
+        self.play_menu_button.draw(self.screen, self.small_font, self.play_menu_button.hit_test(mouse))
+
+        paddle_color = self.current_arena()["line"]
+        ball_color = self.current_arena()["accent"]
+        pygame.draw.rect(self.screen, paddle_color, self.left_paddle.rect(), border_radius=8)
+        pygame.draw.rect(self.screen, paddle_color, self.right_paddle.rect(), border_radius=8)
 
         for p in self.particles:
             alpha = max(0, min(255, int(255 * (p.life / 0.45))))
@@ -494,10 +647,10 @@ class PingPongGame:
             pygame.draw.circle(puff, col, (3, 3), 3)
             self.screen.blit(puff, (p.x - 3, p.y - 3))
 
-        pygame.draw.circle(self.screen, ORANGE, (int(self.ball.x), int(self.ball.y)), self.ball.radius)
+        pygame.draw.circle(self.screen, ball_color, (int(self.ball.x), int(self.ball.y)), self.ball.radius)
         pygame.draw.circle(self.screen, WHITE, (int(self.ball.x - 4), int(self.ball.y - 4)), self.ball.radius // 3)
 
-        hint = self.small_font.render("W/S: Left  |  Up/Down: Right  |  ESC: Pause  |  R: Restart", True, MUTED)
+        hint = self.small_font.render("W/S: Left | Up/Down: Right | ESC: Pause | R: Restart", True, MUTED)
         self.screen.blit(hint, (SCREEN_W // 2 - hint.get_width() // 2, SCREEN_H - 26))
 
         if self.flash_timer > 0:
@@ -520,35 +673,44 @@ class PingPongGame:
 
         title = self.head_font.render("Paused", True, WHITE)
         info = self.text_font.render("Press ESC to continue", True, MUTED)
-        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, SCREEN_H // 2 - 20)))
-        self.screen.blit(info, info.get_rect(center=(SCREEN_W // 2, SCREEN_H // 2 + 26)))
+        info2 = self.small_font.render("Or click Main Menu button to leave match", True, MUTED)
+        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, SCREEN_H // 2 - 34)))
+        self.screen.blit(info, info.get_rect(center=(SCREEN_W // 2, SCREEN_H // 2 + 2)))
+        self.screen.blit(info2, info2.get_rect(center=(SCREEN_W // 2, SCREEN_H // 2 + 36)))
 
     def draw_menu_scene(self) -> None:
         self.draw_background()
 
-        title = self.title_font.render("PING PONG", True, WHITE)
-        subtitle = self.text_font.render("Day 04 - 100 Days of Python Coding", True, CYAN_SOFT)
-        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, 140)))
-        self.screen.blit(subtitle, subtitle.get_rect(center=(SCREEN_W // 2, 182)))
+        title = self.title_font.render("PING PONG ARENA", True, WHITE)
+        subtitle = self.text_font.render("Day 04 - Fast arcade battle", True, CYAN_SOFT)
+        note = self.small_font.render("Choose mode, set difficulty, and fight for the target score", True, MUTED)
+        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, 136)))
+        self.screen.blit(subtitle, subtitle.get_rect(center=(SCREEN_W // 2, 178)))
+        self.screen.blit(note, note.get_rect(center=(SCREEN_W // 2, 206)))
 
         mouse = pygame.mouse.get_pos()
         for button in self.menu_buttons:
             button.draw(self.screen, self.text_font, button.hit_test(mouse))
 
-        footer = self.small_font.render("Resources from web: OpenGameArt SFX + Google Fonts", True, MUTED)
+        footer = self.small_font.render("Web resources: OpenGameArt SFX + Google Fonts + Picsum", True, MUTED)
         self.screen.blit(footer, footer.get_rect(center=(SCREEN_W // 2, SCREEN_H - 34)))
 
     def draw_settings_scene(self) -> None:
         self.draw_background()
         title = self.title_font.render("SETTINGS", True, WHITE)
-        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, 110)))
+        self.screen.blit(title, title.get_rect(center=(SCREEN_W // 2, 96)))
 
         info1 = self.text_font.render(f"Target Score: {self.config.target_score}", True, CYAN_SOFT)
-        info2 = self.text_font.render(f"AI Speed: {self.config.ai_speed:.2f}", True, CYAN_SOFT)
-        info3 = self.text_font.render(f"Volume: {self.config.master_volume:.2f}", True, CYAN_SOFT)
-        self.screen.blit(info1, (830, 218))
-        self.screen.blit(info2, (830, 303))
-        self.screen.blit(info3, (830, 388))
+        info2 = self.text_font.render(f"AI Difficulty: {self.config.ai_difficulty}", True, CYAN_SOFT)
+        info3 = self.text_font.render(f"Arena: {self.current_arena()['name']}", True, CYAN_SOFT)
+        info4 = self.text_font.render(f"Volume: {self.config.master_volume:.2f}", True, CYAN_SOFT)
+        self.screen.blit(info1, (830, 198))
+        self.screen.blit(info2, (830, 273))
+        self.screen.blit(info3, (830, 348))
+        self.screen.blit(info4, (830, 423))
+
+        caption = self.small_font.render("Difficulty affects AI reaction speed and mistakes", True, MUTED)
+        self.screen.blit(caption, (250, 566))
 
         mouse = pygame.mouse.get_pos()
         for button in self.settings_buttons:
