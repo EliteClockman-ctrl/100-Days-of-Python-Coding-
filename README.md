@@ -19,6 +19,7 @@ Series of daily Python projects designed to build up skills with consistent, man
 - Day 02: `Day-02_Chess-Game` (Chess Game with pygame, full rules, Stockfish/fallback AI, UI + sounds).
 - Day 03: `Day-03_QR-Code-Generator` (Desktop QR generator with presets, styling, and export).
 - Day 04: `Day-04_Ping-Pong-Game` (Pong arcade game with menu, settings, PvP/AI, particles, and web resources).
+- Day 05: `Day-05_XO-Game` (Tic-Tac-Toe with pygame, PvP/PvAI, Easy/Hard bot, scoreboard, and menu controls).
 
 ## Daily workflow
 - Plan a feature or learning goal before coding.
