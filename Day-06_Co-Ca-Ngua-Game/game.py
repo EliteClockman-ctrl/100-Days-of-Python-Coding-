@@ -170,22 +170,22 @@ class SoundManager:
             self.available = False
             return
 
-        files = {
+        files: dict[str, Path] = {
             "click": AUDIO / "click.wav",
             "move": AUDIO / "move.wav",
             "capture": AUDIO / "capture.wav",
         }
-        count: int = 0
+        loaded_keys: list[str] = []
         for key, path in files.items():
             if not path.exists():
                 continue
             try:
                 self.sounds[key] = pygame.mixer.Sound(str(path))
-                count += 1
+                loaded_keys.append(key)
             except Exception:
                 pass
 
-        self.available = count > 0
+        self.available = len(loaded_keys) > 0
         if self.available:
             self.sounds.get("click") and self.sounds["click"].set_volume(0.4)
             self.sounds.get("move") and self.sounds["move"].set_volume(0.55)
@@ -472,14 +472,20 @@ class CaNguaGame:
 
     def choose_ai_token(self) -> int | None:
         color = self.current_color()
-        dice = self.dice_value
-        if not self.movable_tokens or dice is None:
+        if not self.movable_tokens:
             return None
+        dice_opt = self.dice_value
+        if dice_opt is None:
+            return None
+        dice: int = dice_opt
 
         scored: list[tuple[int, int]] = []
         for token_idx in self.movable_tokens:
             step = self.tokens[color][token_idx]
-            new_step = 0 if step == -1 else step + dice
+            if step == -1:
+                new_step = 0
+            else:
+                new_step = step + dice
             score = new_step * 3
 
             if self.will_capture(color, token_idx, dice):
