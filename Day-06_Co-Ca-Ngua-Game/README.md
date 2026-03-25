@@ -1,6 +1,6 @@
-# Day 06 - Co Ca Ngua Game (Ludo style)
+# Day 06 - Horse Race Ludo (Business Edition)
 
-Day 6 builds a full horse-race board game using `pygame` with AI players and rule-based movement.
+Day 6 builds a professional horse-race board game using `pygame` with AI players, web textures, and an all-English UI.
 
 ## Gameplay Features
 - 4 players (`Red`, `Green`, `Yellow`, `Blue`) with 4 horses each
@@ -10,6 +10,8 @@ Day 6 builds a full horse-race board game using `pygame` with AI players and rul
 - `6` or capture gives extra turn
 - Exact roll is required to reach center
 - First player to bring all 4 horses home wins
+- Business-style dashboard with event feed and animated dice display
+- Horse texture loaded from web source (Noto horse image)
 
 ## Controls
 - `Space` or click `Roll Dice` to roll
@@ -29,3 +31,4 @@ Day 6 builds a full horse-race board game using `pygame` with AI players and rul
 - Human controls one color; other colors are AI.
 - You can change human color and toggle sound in menu.
 - Rules implemented follow common Ludo / Co Ca Ngua variant.
+- If `horse_realistic.png` exists, the game uses it as primary horse texture.

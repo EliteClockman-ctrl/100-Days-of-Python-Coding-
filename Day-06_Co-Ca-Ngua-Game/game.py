@@ -1,4 +1,4 @@
-"""Day 06 - Co Ca Ngua (Ludo style) with pygame.
+"""Day 06 - Horse Race Ludo (business edition) with pygame.
 
 Rules implemented (common variant):
 - Roll a die and move one horse by dice value.
@@ -201,15 +201,15 @@ class SoundManager:
 class CaNguaGame:
     def __init__(self) -> None:
         pygame.init()
-        pygame.display.set_caption("Day 06 - Co Ca Ngua")
+        pygame.display.set_caption("Day 06 - Horse Race Business Edition")
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         self.clock = pygame.time.Clock()
         self.running = True
 
-        self.title_font = pygame.font.SysFont("consolas", 52, bold=True)
-        self.head_font = pygame.font.SysFont("consolas", 28, bold=True)
-        self.text_font = pygame.font.SysFont("consolas", 22)
-        self.small_font = pygame.font.SysFont("consolas", 18)
+        self.title_font = pygame.font.SysFont("segoe ui", 50, bold=True)
+        self.head_font = pygame.font.SysFont("segoe ui", 28, bold=True)
+        self.text_font = pygame.font.SysFont("segoe ui", 22)
+        self.small_font = pygame.font.SysFont("segoe ui", 18)
 
         profile = self.load_profile()
         self.human_color = profile["human_color"]
@@ -225,16 +225,19 @@ class CaNguaGame:
         self.scene = SCENE_MENU
         self.current_idx = 0
         self.dice_value: int | None = None
+        self.display_dice_value: int | None = None
+        self.roll_anim_end_ms = 0
         self.movable_tokens: list[int] = []
         self.message = ""
         self.winner_color = ""
+        self.event_feed: list[str] = []
 
         self.tokens: dict[str, list[int]] = {color: [-1, -1, -1, -1] for color in PLAYERS}
 
         self.ai_action_time = 0
 
         self.menu_buttons = [
-            Button("Start Game", pygame.Rect(830, 250, 360, 62)),
+            Button("Start Match", pygame.Rect(830, 250, 360, 62)),
             Button("Human Color: Red", pygame.Rect(830, 330, 360, 62)),
             Button("Sound: On", pygame.Rect(830, 410, 360, 62)),
             Button("Quit", pygame.Rect(830, 490, 360, 62)),
@@ -243,7 +246,7 @@ class CaNguaGame:
         self.play_buttons = [
             Button("Roll Dice", pygame.Rect(830, 270, 360, 58)),
             Button("End Turn", pygame.Rect(830, 340, 360, 58)),
-            Button("New Game", pygame.Rect(830, 410, 360, 58)),
+            Button("New Match", pygame.Rect(830, 410, 360, 58)),
             Button("Main Menu", pygame.Rect(830, 480, 360, 58)),
         ]
         self.sync_menu_labels()
@@ -282,36 +285,47 @@ class CaNguaGame:
             return None
 
     def load_horse_texture(self) -> pygame.Surface | None:
-        path = TEXTURES / "horse_base.png"
-        if not path.exists():
-            return None
-        try:
-            img = pygame.image.load(str(path)).convert_alpha()
-            return pygame.transform.smoothscale(img, (30, 30))
-        except Exception:
-            return None
+        for name in ["horse_realistic.png", "horse_base.png", "horse_knight_base.png"]:
+            path = TEXTURES / name
+            if not path.exists():
+                continue
+            try:
+                img = pygame.image.load(str(path)).convert_alpha()
+                return pygame.transform.smoothscale(img, (30, 30))
+            except Exception:
+                continue
+        return None
 
     def load_dice_texture(self) -> pygame.Surface | None:
-        path = TEXTURES / "dice_icon.png"
-        if not path.exists():
-            return None
-        try:
-            img = pygame.image.load(str(path)).convert_alpha()
-            return pygame.transform.smoothscale(img, (34, 34))
-        except Exception:
-            return None
+        for name in ["dice_realistic.png", "dice_icon.png"]:
+            path = TEXTURES / name
+            if not path.exists():
+                continue
+            try:
+                img = pygame.image.load(str(path)).convert_alpha()
+                return pygame.transform.smoothscale(img, (34, 34))
+            except Exception:
+                continue
+        return None
 
     def sync_menu_labels(self) -> None:
         self.menu_buttons[1].text = f"Human Color: {COLOR_LABEL[self.human_color]}"
         self.menu_buttons[2].text = f"Sound: {'On' if self.sound_enabled else 'Off'}"
 
+    def push_event(self, text: str) -> None:
+        self.event_feed.insert(0, text)
+        self.event_feed = self.event_feed[:6]
+
     def reset_game(self) -> None:
         self.tokens = {color: [-1, -1, -1, -1] for color in PLAYERS}
         self.current_idx = 0
         self.dice_value = None
+        self.display_dice_value = None
+        self.roll_anim_end_ms = 0
         self.movable_tokens = []
-        self.message = "New game started. Roll dice to move."
+        self.message = "New match started. Roll the dice to move."
         self.winner_color = ""
+        self.event_feed = ["Match started"]
         self.ai_action_time = pygame.time.get_ticks() + 400
 
     def current_color(self) -> str:
@@ -398,7 +412,8 @@ class CaNguaGame:
 
         if all(step == FINAL_STEP for step in self.tokens[color]):
             self.winner_color = color
-            self.message = f"{COLOR_LABEL[color]} wins the game!"
+            self.message = f"{COLOR_LABEL[color]} wins the match!"
+            self.push_event(self.message)
 
         return captured
 
@@ -410,14 +425,18 @@ class CaNguaGame:
 
         if extra_turn:
             self.dice_value = None
+            self.display_dice_value = None
             self.movable_tokens = []
             self.message = f"{COLOR_LABEL[self.current_color()]} gets extra turn."
+            self.push_event(self.message)
             return
 
         self.current_idx = (self.current_idx + 1) % len(PLAYERS)
         self.dice_value = None
+        self.display_dice_value = None
         self.movable_tokens = []
         self.message = f"Turn: {COLOR_LABEL[self.current_color()]}"
+        self.push_event(self.message)
 
         if not self.is_human_turn():
             self.ai_action_time = pygame.time.get_ticks() + 500
@@ -428,11 +447,15 @@ class CaNguaGame:
 
         color = self.current_color()
         self.dice_value = random.randint(1, 6)
+        self.display_dice_value = self.dice_value
+        self.roll_anim_end_ms = pygame.time.get_ticks() + 500
         self.movable_tokens = self.compute_movable_tokens(color, self.dice_value)
         self.message = f"{COLOR_LABEL[color]} rolled {self.dice_value}."
+        self.push_event(self.message)
 
         if not self.movable_tokens:
             self.message += " No valid move."
+            self.push_event(self.message)
             self.end_turn(False)
 
     def choose_ai_token(self) -> int | None:
@@ -523,8 +546,10 @@ class CaNguaGame:
 
         captured = self.move_token(self.current_color(), token_idx, self.dice_value)
         self.sounds.play("move", self.sound_enabled)
+        self.push_event(f"{COLOR_LABEL[self.current_color()]} moved horse #{token_idx + 1}.")
         if captured:
             self.sounds.play("capture", self.sound_enabled)
+            self.push_event(f"{COLOR_LABEL[self.current_color()]} captured an opponent horse.")
 
         extra = self.dice_value == 6 or captured
         self.end_turn(extra)
@@ -577,8 +602,10 @@ class CaNguaGame:
 
         captured = self.move_token(self.current_color(), token_idx, self.dice_value)
         self.sounds.play("move", self.sound_enabled)
+        self.push_event(f"{COLOR_LABEL[self.current_color()]} moved horse #{token_idx + 1}.")
         if captured:
             self.sounds.play("capture", self.sound_enabled)
+            self.push_event(f"{COLOR_LABEL[self.current_color()]} captured an opponent horse.")
 
         extra = self.dice_value == 6 or captured
         self.end_turn(extra)
@@ -713,7 +740,7 @@ class CaNguaGame:
         pygame.draw.rect(self.screen, PANEL, panel, border_radius=16)
         pygame.draw.rect(self.screen, PANEL_BORDER, panel, 2, border_radius=16)
 
-        title = self.head_font.render("Co Ca Ngua - Day 06", True, TEXT)
+        title = self.head_font.render("Horse Race Dashboard", True, TEXT)
         self.screen.blit(title, (804, 94))
 
         turn = self.current_color()
@@ -723,10 +750,10 @@ class CaNguaGame:
         human_text = self.small_font.render(f"Human: {COLOR_LABEL[self.human_color]} | Space: Roll", True, MUTED)
         self.screen.blit(human_text, (804, 170))
 
-        if self.dice_value is None:
+        if self.display_dice_value is None:
             dice_text = self.text_font.render("Dice: -", True, ACCENT)
         else:
-            dice_text = self.text_font.render(f"Dice: {self.dice_value}", True, GOLD)
+            dice_text = self.text_font.render(f"Dice: {self.display_dice_value}", True, GOLD)
         self.screen.blit(dice_text, (804, 212))
 
         if self.dice_texture:
@@ -766,20 +793,31 @@ class CaNguaGame:
             self.screen.blit(surf, (804, yy))
             yy += 24
 
+        feed_box = pygame.Rect(790, 560, 432, 90)
+        pygame.draw.rect(self.screen, (28, 36, 54), feed_box, border_radius=10)
+        pygame.draw.rect(self.screen, PANEL_BORDER, feed_box, 1, border_radius=10)
+        feed_title = self.small_font.render("Event Feed", True, ACCENT)
+        self.screen.blit(feed_title, (802, 566))
+        fy = 590
+        for item in self.event_feed[:2]:
+            row = self.small_font.render(f"- {item[:52]}", True, MUTED)
+            self.screen.blit(row, (802, fy))
+            fy += 22
+
         if self.winner_color:
             overlay = pygame.Surface((BOARD_PX, BOARD_PX), pygame.SRCALPHA)
             overlay.fill((6, 12, 20, 180))
             self.screen.blit(overlay, (BOARD_X, BOARD_Y))
             winner = self.title_font.render(f"{COLOR_LABEL[self.winner_color]} Wins!", True, COLOR_RGB[self.winner_color])
             self.screen.blit(winner, winner.get_rect(center=(BOARD_X + BOARD_PX // 2, BOARD_Y + BOARD_PX // 2 - 10)))
-            tip = self.small_font.render("Click New Game to play again", True, TEXT)
+            tip = self.small_font.render("Click New Match to play again", True, TEXT)
             self.screen.blit(tip, tip.get_rect(center=(BOARD_X + BOARD_PX // 2, BOARD_Y + BOARD_PX // 2 + 44)))
 
     def draw_menu(self) -> None:
         self.draw_background()
 
-        title = self.title_font.render("CO CA NGUA", True, TEXT)
-        subtitle = self.text_font.render("Day 06 - Horse Race Board Game", True, ACCENT)
+        title = self.title_font.render("HORSE RACE LUDO", True, TEXT)
+        subtitle = self.text_font.render("Business Edition - Day 06", True, ACCENT)
         desc = self.small_font.render("Rule-based movement, capture, home lane, AI opponents", True, MUTED)
         self.screen.blit(title, (800, 130))
         self.screen.blit(subtitle, (804, 198))
@@ -893,7 +931,18 @@ class CaNguaGame:
                 else:
                     self.handle_play_click(event.pos)
 
+    def update_roll_animation(self) -> None:
+        if self.roll_anim_end_ms <= 0:
+            return
+        now = pygame.time.get_ticks()
+        if now < self.roll_anim_end_ms:
+            self.display_dice_value = random.randint(1, 6)
+        else:
+            self.roll_anim_end_ms = 0
+            self.display_dice_value = self.dice_value
+
     def update(self) -> None:
+        self.update_roll_animation()
         self.update_ai()
 
     def run(self) -> None:

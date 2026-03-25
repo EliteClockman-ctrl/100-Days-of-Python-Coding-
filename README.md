@@ -20,7 +20,7 @@ Series of daily Python projects designed to build up skills with consistent, man
 - Day 03: `Day-03_QR-Code-Generator` (Desktop QR generator with presets, styling, and export).
 - Day 04: `Day-04_Ping-Pong-Game` (Pong arcade game with menu, settings, PvP/AI, particles, and web resources).
 - Day 05: `Day-05_XO-Game` (Tic-Tac-Toe with pygame, PvP/PvAI, Easy/Hard bot, scoreboard, and menu controls).
-- Day 06: `Day-06_Co-Ca-Ngua-Game` (Co Ca Ngua / Ludo style with 4 players, dice rules, capture, home lane, AI turns, and web textures).
+- Day 06: `Day-06_Co-Ca-Ngua-Game` (Horse Race Ludo Business Edition with all-English UI, horse textures, dice rules, capture, home lane, and AI turns).
 
 ## Daily workflow
 - Plan a feature or learning goal before coding.
