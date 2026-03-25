@@ -16,7 +16,7 @@ import random
 from dataclasses import dataclass
 from pathlib import Path
 
-import pygame
+import pygame  # pyre-ignore[21]
 
 
 ROOT = Path(__file__).resolve().parent
@@ -39,7 +39,7 @@ BOARD_Y = 58
 BOARD_PX = GRID_SIZE * CELL
 
 FINAL_STEP = 58
-SAFE_INDICES = {0, 8, 13, 21, 26, 34, 39, 47}
+SAFE_INDICES: set[int] = {0, 8, 13, 21, 26, 34, 39, 47}
 
 BG_TOP = (20, 26, 43)
 BG_BOTTOM = (10, 14, 26)
@@ -63,8 +63,8 @@ COLOR_LABEL = {
     "blue": "Blue",
 }
 
-PLAYERS = ["red", "green", "yellow", "blue"]
-START_INDEX = {"red": 0, "green": 13, "yellow": 26, "blue": 39}
+PLAYERS: list[str] = ["red", "green", "yellow", "blue"]
+START_INDEX: dict[str, int] = {"red": 0, "green": 13, "yellow": 26, "blue": 39}
 
 OUTER_PATH = [
     (6, 1),
@@ -175,7 +175,7 @@ class SoundManager:
             "move": AUDIO / "move.wav",
             "capture": AUDIO / "capture.wav",
         }
-        count = 0
+        count: int = 0
         for key, path in files.items():
             if not path.exists():
                 continue
@@ -314,7 +314,18 @@ class CaNguaGame:
 
     def push_event(self, text: str) -> None:
         self.event_feed.insert(0, text)
-        self.event_feed = self.event_feed[:6]
+        while len(self.event_feed) > 6:
+            self.event_feed.pop()
+
+    def truncate_text(self, text: str, limit: int) -> str:
+        if len(text) <= limit:
+            return text
+        out: list[str] = []
+        for i, ch in enumerate(text):
+            if i >= limit:
+                break
+            out.append(ch)
+        return "".join(out)
 
     def reset_game(self) -> None:
         self.tokens = {color: [-1, -1, -1, -1] for color in PLAYERS}
@@ -446,11 +457,12 @@ class CaNguaGame:
             return
 
         color = self.current_color()
-        self.dice_value = random.randint(1, 6)
-        self.display_dice_value = self.dice_value
+        dice = random.randint(1, 6)
+        self.dice_value = dice
+        self.display_dice_value = dice
         self.roll_anim_end_ms = pygame.time.get_ticks() + 500
-        self.movable_tokens = self.compute_movable_tokens(color, self.dice_value)
-        self.message = f"{COLOR_LABEL[color]} rolled {self.dice_value}."
+        self.movable_tokens = self.compute_movable_tokens(color, dice)
+        self.message = f"{COLOR_LABEL[color]} rolled {dice}."
         self.push_event(self.message)
 
         if not self.movable_tokens:
@@ -460,16 +472,17 @@ class CaNguaGame:
 
     def choose_ai_token(self) -> int | None:
         color = self.current_color()
-        if not self.movable_tokens or self.dice_value is None:
+        dice = self.dice_value
+        if not self.movable_tokens or dice is None:
             return None
 
         scored: list[tuple[int, int]] = []
         for token_idx in self.movable_tokens:
             step = self.tokens[color][token_idx]
-            new_step = 0 if step == -1 else step + self.dice_value
+            new_step = 0 if step == -1 else step + dice
             score = new_step * 3
 
-            if self.will_capture(color, token_idx, self.dice_value):
+            if self.will_capture(color, token_idx, dice):
                 score += 140
             if new_step == FINAL_STEP:
                 score += 180
@@ -540,18 +553,22 @@ class CaNguaGame:
         if self.dice_value is None or not self.movable_tokens:
             return
 
+        dice = self.dice_value
+        if dice is None:
+            return
+
         token_idx = self.token_under_cursor(pos)
         if token_idx is None:
             return
 
-        captured = self.move_token(self.current_color(), token_idx, self.dice_value)
+        captured = self.move_token(self.current_color(), token_idx, dice)
         self.sounds.play("move", self.sound_enabled)
         self.push_event(f"{COLOR_LABEL[self.current_color()]} moved horse #{token_idx + 1}.")
         if captured:
             self.sounds.play("capture", self.sound_enabled)
             self.push_event(f"{COLOR_LABEL[self.current_color()]} captured an opponent horse.")
 
-        extra = self.dice_value == 6 or captured
+        extra = dice == 6 or captured
         self.end_turn(extra)
 
     def handle_events(self) -> None:
@@ -600,14 +617,20 @@ class CaNguaGame:
             self.ai_action_time = now + 420
             return
 
-        captured = self.move_token(self.current_color(), token_idx, self.dice_value)
+        dice = self.dice_value
+        if dice is None:
+            self.end_turn(False)
+            self.ai_action_time = now + 420
+            return
+
+        captured = self.move_token(self.current_color(), token_idx, dice)
         self.sounds.play("move", self.sound_enabled)
         self.push_event(f"{COLOR_LABEL[self.current_color()]} moved horse #{token_idx + 1}.")
         if captured:
             self.sounds.play("capture", self.sound_enabled)
             self.push_event(f"{COLOR_LABEL[self.current_color()]} captured an opponent horse.")
 
-        extra = self.dice_value == 6 or captured
+        extra = dice == 6 or captured
         self.end_turn(extra)
         self.ai_action_time = now + 560
 
@@ -727,7 +750,7 @@ class CaNguaGame:
             self.screen.blit(label, label.get_rect(center=(cx, cy)))
 
     def draw_all_pieces(self) -> None:
-        highlights = set()
+        highlights: set[int] = set()
         if self.scene == SCENE_PLAY and self.is_human_turn() and self.dice_value is not None:
             highlights = set(self.movable_tokens)
 
@@ -759,7 +782,8 @@ class CaNguaGame:
         if self.dice_texture:
             self.screen.blit(self.dice_texture, (950, 205))
 
-        msg = self.small_font.render(self.message[:64], True, MUTED)
+        msg_text = self.truncate_text(self.message, 64)
+        msg = self.small_font.render(msg_text, True, MUTED)
         self.screen.blit(msg, (804, 250))
 
         # Status per player
@@ -799,8 +823,10 @@ class CaNguaGame:
         feed_title = self.small_font.render("Event Feed", True, ACCENT)
         self.screen.blit(feed_title, (802, 566))
         fy = 590
-        for item in self.event_feed[:2]:
-            row = self.small_font.render(f"- {item[:52]}", True, MUTED)
+        max_feed = 2 if len(self.event_feed) >= 2 else len(self.event_feed)
+        for idx in range(max_feed):
+            item = self.event_feed[idx]
+            row = self.small_font.render(f"- {self.truncate_text(item, 52)}", True, MUTED)
             self.screen.blit(row, (802, fy))
             fy += 22
 
@@ -843,93 +869,6 @@ class CaNguaGame:
         else:
             self.draw_play()
         pygame.display.flip()
-
-    def handle_menu_click(self, pos: tuple[int, int]) -> None:
-        if self.menu_buttons[0].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            self.scene = SCENE_PLAY
-            self.reset_game()
-        elif self.menu_buttons[1].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            idx = PLAYERS.index(self.human_color)
-            self.human_color = PLAYERS[(idx + 1) % len(PLAYERS)]
-            self.sync_menu_labels()
-        elif self.menu_buttons[2].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            self.sound_enabled = not self.sound_enabled
-            self.sync_menu_labels()
-        elif self.menu_buttons[3].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            self.running = False
-
-    def handle_play_click(self, pos: tuple[int, int]) -> None:
-        if self.play_buttons[0].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            if self.is_human_turn() and not self.winner_color:
-                self.roll_dice()
-            return
-
-        if self.play_buttons[1].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            if self.is_human_turn() and self.dice_value is not None:
-                self.end_turn(False)
-            return
-
-        if self.play_buttons[2].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            self.reset_game()
-            return
-
-        if self.play_buttons[3].hit(pos):
-            self.sounds.play("click", self.sound_enabled)
-            self.scene = SCENE_MENU
-            return
-
-        if self.winner_color:
-            return
-        if not self.is_human_turn():
-            return
-        if self.dice_value is None or not self.movable_tokens:
-            return
-
-        token_idx = self.token_under_cursor(pos)
-        if token_idx is None:
-            return
-
-        captured = self.move_token(self.current_color(), token_idx, self.dice_value)
-        self.sounds.play("move", self.sound_enabled)
-        if captured:
-            self.sounds.play("capture", self.sound_enabled)
-
-        extra = self.dice_value == 6 or captured
-        self.end_turn(extra)
-
-    def token_under_cursor(self, pos: tuple[int, int]) -> int | None:
-        color = self.current_color()
-        for token_idx in self.movable_tokens:
-            gx, gy = self.step_to_grid(color, token_idx)
-            cx, cy = self.grid_to_px(gx, gy)
-            if (pos[0] - cx) ** 2 + (pos[1] - cy) ** 2 <= 22**2:
-                return token_idx
-        return None
-
-    def handle_events(self) -> None:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    if self.scene == SCENE_PLAY:
-                        self.scene = SCENE_MENU
-                    else:
-                        self.running = False
-                elif event.key == pygame.K_SPACE and self.scene == SCENE_PLAY and self.is_human_turn():
-                    self.roll_dice()
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if self.scene == SCENE_MENU:
-                    self.handle_menu_click(event.pos)
-                else:
-                    self.handle_play_click(event.pos)
 
     def update_roll_animation(self) -> None:
         if self.roll_anim_end_ms <= 0:
